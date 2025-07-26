@@ -45,3 +45,13 @@ create procedure ApplyDiscount(
         select* from discount_codes where code="DIWALI21";
         call ApplyDiscount(20,"HOLI23");
  
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
