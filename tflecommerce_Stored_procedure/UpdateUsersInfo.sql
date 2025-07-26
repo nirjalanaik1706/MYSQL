@@ -16,5 +16,5 @@ END //
 
 DELIMITER ;
 
-CALL UpdateUserInfo(1, 'ajinkya@gmailcom', 'Sahakar Nagar 1');
+CALL UpdateUserInfo(1, 'nirjala@gmailcom', 'kolhapur');
 
