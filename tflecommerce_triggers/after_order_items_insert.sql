@@ -1,3 +1,5 @@
+-- 1. Trigger to Update Stock After an Order is Placed
+
 SELECT * FROM tflecommerce.order_items;
 SELECT * FROM tflecommerce.products;
 use tflecommerce;
