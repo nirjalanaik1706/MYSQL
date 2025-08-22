@@ -2,12 +2,14 @@ CREATE Database TFLMentoringDB;
 USE TFLMentoringDB;
 
 
-CREATE TABLE repositories (
+CREATE TABLE repositories
+(
     Id INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE topics (
+CREATE TABLE topics 
+(
     Id INT AUTO_INCREMENT PRIMARY KEY,
     Title VARCHAR(255) NOT NULL,
     Url VARCHAR(500),
