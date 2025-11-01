@@ -52,11 +52,13 @@ INSERT INTO Doctors (FirstName, LastName, Specialty, ContactNumber) VALUES
 ('Dr. Raj', 'Verma', 'Cardiologist', '9123456789'),
 ('Dr. Neha', 'Sharma', 'Dermatologist', '9123456790');
 
+
 -- Insert Appointments
 INSERT INTO Appointments (PatientID, DoctorID, AppointmentDate, AppointmentTime, Status) VALUES
 (1, 1, '2025-07-10', '10:30:00', 'Completed'),
 (2, 2, '2025-07-12', '11:00:00', 'Scheduled'),
 (1, 2, '2025-07-14', '14:00:00', 'Cancelled');
+
 
 -- Insert Prescriptions
 INSERT INTO Prescriptions (AppointmentID, MedicineName, Dosage, Duration) VALUES
