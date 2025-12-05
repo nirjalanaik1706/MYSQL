@@ -9,3 +9,4 @@ BEGIN
     values(OLD.id,OLD.price,NEW.price,NOW());
 END //
 DELIMITER ;
+insert into price_changes(product_id,old_price,new_price,change_date)values(20,69.99,100.00,now());
