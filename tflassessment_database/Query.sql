@@ -363,4 +363,12 @@ FROM users u
 JOIN userroles ur ON u.id = ur.userid
 WHERE ur.roleid IN (2,3)
 GROUP BY u.id, u.firstname, u.lastname
-HAVING COUNT(DISTINCT ur.roleid) = 2;
+HAVING COUNT(DISTINCT ur.roleid) = 2
+
+--  Retrieve users who have all of the specified roles, grouping by user and ensuring they match the total role count.
+-- SELECT u.id, u.firstname, u.lastname
+-- FROM users u
+-- JOIN userroles ur ON u.id = ur.userid
+-- WHERE ur.roleid IN (2,3)
+-- GROUP BY u.id, u.firstname, u.lastname
+-- HAVING COUNT(DISTINCT ur.roleid) = 2;
