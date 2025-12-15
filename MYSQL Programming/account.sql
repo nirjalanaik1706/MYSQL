@@ -8,8 +8,6 @@ create table account_info(
 );
 
 INSERT INTO account_info (Account_id, Accounter_holder_name, Account_type, Account_balance) VALUES
-(1, 'Naina surve', 'Savings', '15000'),
-(2, 'Nirjala naik', 'Current', '27000'),
-(3, 'Sahil kamble', 'Savings', '42000'),
-(4, 'Sarthak walke', 'Current', '34000'),
-(5, 'Vikram Singh', 'Savings', '18000');
+
+(1, 'Nirjala naik', 'Current', '27000'),
+(2, 'Sahil kamble', 'Savings', '42000');
