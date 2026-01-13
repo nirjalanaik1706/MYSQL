@@ -7,23 +7,27 @@ drop procedure if exists spcandidatetestresult;
 
 DELIMITER $$
 
-create procedure spcandidatetestresult(IN pcandidateId INT,In ptestId INT,OUT pscore INT )
+create procedure spcandidatetestresult(IN pcandidateId INT,In passessmentId INT,OUT pscore INT )
 BEGIN
 DECLARE totalMarks INT;
 SELECT COUNT(CASE WHEN candidateanswers.answerkey = questionbank.answerkey THEN 1 ELSE NULL END) AS score 
 INTO totalMarks FROM candidateanswers 
-INNER JOIN   testquestions  on testquestions.questionbankid=candidateanswers.testquestionid
+INNER JOIN   testquestions  on testquestions.id=candidateanswers.testquestionid
 INNER JOIN   questionbank on questionbank.id=testquestions.questionbankid
-WHERE candidateanswers.candidateid = pcandidateId AND testquestions.testid = ptestId;
+INNER JOIN tests on tests.id=testquestions.testid
+INNER JOIN assessments on assessments.test_id=tests.id
+WHERE candidateanswers.candidateid = pcandidateId AND assessments.id = passessmentId;
 set pscore=totalMarks;
-Update candidatetestresults  set score =pscore where candidateid= pcandidateId and testid= ptestId;
+Update candidatetestresults  set score =pscore where candidateid= pcandidateId and assessmentid= passessmentId;
 END $$
 
 DELIMITER ;
 
 
-call spcandidatetestresult(1,22,@pscore);
+call spcandidatetestresult(4,1,@pscore);
 select(@pscore);
+
+
 
 DROP PROCEDURE IF EXISTS spinterviewdetails;
 
@@ -70,112 +74,158 @@ DELIMITER ;
 -- Call the procedure by passing a dynamic interview ID
 CALL spinterviewdetails(5);
 
-DROP PROCEDURE IF Exists spcandidatetestresultdetails;
 
+DROP PROCEDURE IF Exists spcandidateassessmentresultdetails;
+-- assis use
 DELIMITER $$
-create procedure spcandidatetestresultdetails(IN pcandidateId INT, IN ptestId INT, OUT pcorrectAnswers INT, OUT pincorrectAnswers INT, OUT pskippedQuestions INT)
+create procedure spcandidateassessmentresultdetails(IN pcandidateId INT, IN passessmentId INT, OUT pcorrectAnswers INT, OUT pincorrectAnswers INT, OUT pskippedQuestions INT)
 BEGIN
 DECLARE totalQuestions INT;
 DECLARE correctCandidateAnswers INT;
 DECLARE attendedCount INT;
 
- SELECT COUNT(*) INTO attendedCount
+     -- total attended question
+	SELECT COUNT(assessments.status)  INTO attendedCount
     FROM candidateanswers
-    INNER JOIN testquestions ON testquestions.questionbankid = candidateanswers.testquestionid
+    INNER JOIN testquestions ON testquestions.id = candidateanswers.testquestionid
+	INNER JOIN tests on tests.id=testquestions.testid
+    JOIN assessments on assessments.test_id = tests.id
     WHERE candidateanswers.candidateid = pcandidateId 
-      AND testquestions.testid = ptestId;
-
+	AND assessments.id = passessmentId
+    AND assessments.status='conducted';
+      
     IF attendedCount = 0 THEN
         SELECT 'Candidate has not attended the test.' AS message;
     ELSE
-    
-select count(*) INTO totalQuestions from testquestions where testid=ptestId;
+  -- total question  
+      select count(*) into totalQuestions from testquestions
+      join tests on tests.id = testquestions.testid
+      join assessments on assessments.test_id = tests.id
+      where assessments.id=passessmentId;
 
-SELECT COUNT(CASE WHEN candidateanswers.answerkey = questionbank.answerkey THEN 1 ELSE NULL END) AS score 
-INTO correctCandidateAnswers FROM candidateanswers 
-INNER JOIN   testquestions  on testquestions.questionbankid=candidateanswers.testquestionid
-INNER JOIN   questionbank on questionbank.id=testquestions.questionbankid
-WHERE candidateanswers.candidateid = pcandidateId AND testquestions.testid = ptestId;
-SET pincorrectAnswers = totalQuestions-correctCandidateAnswers;
-SELECT COUNT(*) INTO pskippedQuestions FROM CandidateAnswers INNER JOIN testQuestions ON testquestions.id = candidateanswers.testquestionid 
-WHERE candidateanswers.answerkey="NO" AND candidateanswers.candidateId = pcandidateId AND testquestions.testId = ptestId;
+		-- correct question
+		SELECT COUNT(CASE WHEN candidateanswers.answerkey = questionbank.answerkey THEN 1 ELSE NULL END) AS score 
+		INTO correctCandidateAnswers FROM candidateanswers 
+		INNER JOIN   testquestions  on testquestions.id=candidateanswers.testquestionid
+		INNER JOIN   questionbank on questionbank.id=testquestions.questionbankid
+		INNER JOIN tests on tests.id=testquestions.testid
+		INNER JOIN assessments on assessments.test_id = tests.id
+		WHERE candidateanswers.candidateid = pcandidateId AND assessments.id = passessmentId;
 
-SET pcorrectAnswers=correctCandidateAnswers;
+		-- skipped question
+		SELECT COUNT(*) INTO pskippedQuestions  FROM CandidateAnswers
+		 INNER JOIN testquestions ON testquestions.id = candidateanswers.testquestionid 
+		 INNER JOIN tests on tests.id=testquestions.testid
+		INNER JOIN assessments on assessments.test_id = tests.id
+		WHERE candidateanswers.answerkey="N" 
+		AND candidateanswers.candidateId = pcandidateId AND assessments.id = passessmentId;
+
+		SET pincorrectAnswers = totalQuestions-correctCandidateAnswers - pskippedQuestions;
+		SET pcorrectAnswers=correctCandidateAnswers;
 END IF;
 END $$
 
-CALL spcandidatetestresultdetails(32,2, @pcorrectAnswers, @pincorrectAnswers,@pskippedQuestions);
+CALL spcandidateassessmentresultdetails(4,1, @pcorrectAnswers, @pincorrectAnswers,@pskippedQuestions);
 
 select @pcorrectAnswers,@pincorrectAnswers,@pskippedQuestions;
 
 
 
 
+
 DROP PROCEDURE IF Exists spupdatemarks;
-
 DELIMITER $$
-create procedure spupdatemarks(in ptestid int, in markstoraise int)
-begin 
-declare candId int;
-declare marks int;
 
-declare candidate_result_cursor cursor for
-select  score,candidateid from candidatetestresults where testid= ptestid;
- OPEN  candidate_result_cursor;
- loop
-     -- Forward only recordset
+CREATE PROCEDURE spupdatemarks(IN passessmentid INT, IN markstoraise INT)
+BEGIN
+    DECLARE candId INT;
+    DECLARE marks INT;
+    DECLARE done INT DEFAULT 0;
 
-    FETCH NEXT FROM  candidate_result_cursor INTO marks, candId;
+    DECLARE candidate_result_cursor CURSOR FOR
+        SELECT score, candidateid 
+        FROM candidatetestresults 
+        WHERE assessmentid = passessmentid;
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+    OPEN candidate_result_cursor;
+
+    read_loop: LOOP
+        FETCH candidate_result_cursor INTO marks, candId;
+        IF done = 1 THEN
+            LEAVE read_loop;
+        END IF;
+
         SET marks = marks + markstoraise;
+
         UPDATE candidatetestresults 
         SET score = marks
-        WHERE candidateid = candId;
-	end loop;
-close candidate_result_cursor;
-end $$
+        WHERE candidateid = candId AND assessmentid = passessmentid;
+    END LOOP;
 
-call spupdatemarks(1, 13);
+    CLOSE candidate_result_cursor;
+END $$
+
+DELIMITER ;
+call spupdatemarks(1, 3);
 
 
-
-
-DROP PROCEDURE IF Exists spcandidate_performance;
+DROP PROCEDURE IF EXISTS spcandidate_performance;
 
 DELIMITER $$
-create procedure spcandidate_performance(in ptestid INT )
-begin 
 
-    DECLARE marks int;
-    DECLARE candId int;
-  
+CREATE PROCEDURE spcandidate_performance(IN passessmentid INT)
+BEGIN
+    DECLARE marks INT;
+    DECLARE candId INT;
     DECLARE performance_level VARCHAR(20);
-    DECLARE candidate_testresult_cursor  cursor for
-    select score,candidateid  from candidatetestresults where testid=ptestid;
-    open  candidate_testresult_cursor;
-	LOOP
-		FETCH NEXT FROM  candidate_testresult_cursor INTO marks, candId;
-		BEGIN
-             IF marks >= 9 THEN
-              set performance_level="excellent";
-				   ELSE  IF marks >= 7 THEN
-					set performance_level="very good";
-						else IF marks >= 5 THEN
-								set performance_level="good";
-								else IF  marks >= 4 THEN
-										set performance_level="poor";
-								END IF;    
-						End If;
-				   End If;
-            End IF;
-        END;
-		UPDATE employeeperformance    SET test = performance_level
-        WHERE employeeid = candId;
-     End LOOP;
-    close candidate_testresult_cursor;
-end $$
+    DECLARE done INT DEFAULT 0;
 
+    -- Cursor to get candidate scores
+    DECLARE candidate_testresult_cursor CURSOR FOR
+        SELECT score, candidateid 
+        FROM candidatetestresults 
+        WHERE assessmentid = passessmentid;
+
+    -- Handler to detect end of cursor
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+    OPEN candidate_testresult_cursor;
+
+    read_loop: LOOP
+        FETCH candidate_testresult_cursor INTO marks, candId;
+        IF done = 1 THEN
+            LEAVE read_loop;
+        END IF;
+
+        -- Determine performance level
+        IF marks >= 9 THEN
+            SET performance_level = 'excellent';
+        ELSEIF marks >= 7 THEN
+            SET performance_level = 'very good';
+        ELSEIF marks >= 5 THEN
+            SET performance_level = 'good';
+        ELSEIF marks >= 4 THEN
+            SET performance_level = 'poor';
+        ELSE
+            SET performance_level = 'very poor';
+        END IF;
+
+        -- Update employee performance
+        UPDATE employeeperformance
+        SET test = performance_level
+        WHERE employeeid = candId;
+
+    END LOOP;
+
+    CLOSE candidate_testresult_cursor;
+END $$
+
+DELIMITER ;
 
 call spcandidate_performance(1);
+
 
 DROP PROCEDURE IF EXISTS spcandidateinterviewperformance;
 DELIMITER $$
@@ -212,8 +262,8 @@ DELIMITER $$
 
 CREATE PROCEDURE spgettestevaluationcriteriapercentage(IN p_testid INT)
 BEGIN
-    SELECT 
-        ec.id AS evaluation_criteria_id,
+         select
+     ec.id AS evaluation_criteria_id,
         ec.title AS evaluation_criteria_title,
         COUNT(qb.id) AS total_questions,
         ROUND(COUNT(qb.id) * 100.0 / 
@@ -225,10 +275,12 @@ BEGIN
         testquestions tq
     JOIN 
         questionbank qb ON tq.questionbankid = qb.id
+	JOIN 
+        subject_concepts sc on sc.subject_concept_id=qb.subject_concept_id
     JOIN 
-        concepts ec ON qb.conceptid = ec.id
+        concepts ec ON sc.concept_id = ec.id
     JOIN 
-        subjects s ON s.id = ec.subjectid
+        subjects s ON s.id = sc.subject_id
     WHERE 
         tq.testid = p_testid
     GROUP BY 
@@ -242,7 +294,7 @@ call spgettestevaluationcriteriapercentage(1);
 DROP PROCEDURE IF Exists spgetaveragereportbytestid;
 DELIMITER $$
 
-CREATE PROCEDURE spgetaveragereportbytestid(IN testid INT)
+CREATE PROCEDURE spgetaveragereportbytestid(IN assessmentid INT)
 BEGIN
     SELECT 
         s.title AS subjectname,
@@ -260,10 +312,13 @@ BEGIN
         candidateanswers ca
         JOIN testquestions tq ON ca.testquestionid = tq.id
         JOIN questionbank qb ON tq.questionbankid = qb.id
-        JOIN concepts ec ON qb.conceptid = ec.id
-        JOIN subjects s ON qb.subjectid = s.id
+        join subject_concepts sc on sc.subject_concept_id=qb.subject_concept_id
+        join tests t on t.id=tq.testid
+        join assessments a on a.test_id=t.id
+        JOIN concepts ec ON sc.concept_id = ec.id
+        JOIN subjects s ON sc.subject_id = s.id
     WHERE 
-        tq.testid = testid
+        a.id = assessmentid
     GROUP BY 
         s.id, ec.id;
 END $$
@@ -274,51 +329,30 @@ CALL spgetaveragereportbytestid(1);
 
 
 
-DROP PROCEDURE IF Exists GetTestEmployeeDetailsByCandidate;
+DROP PROCEDURE IF Exists getAssessmentEmployeeDetailsByCandidate;
 DELIMITER $$
 
-CREATE PROCEDURE GetTestEmployeeDetailsByCandidate(IN candidate INT)
+CREATE PROCEDURE getAssessmentEmployeeDetailsByCandidate(IN candidate INT)
 BEGIN
     SELECT 
-        t.id,
-        ts.candidateid,
+        t.id  AS Id,
+        a.id AS assessmentid,
+        a.candidate_id,
         t.name AS testname,
         t.passinglevel,
         t.duration,
-        ts.scheduledstart,
-        ts.scheduledend,
-        ts.status
+        a.scheduledstart,
+        a.scheduledend,
+        a.status
     FROM 
-        testschedules ts
+        assessments a
     JOIN 
-        tests t ON ts.testid = t.id
+        tests t ON a.test_id = t.id
     WHERE 
-        ts.candidateid = candidate;
+        a.candidate_id = candidate;
 END $$
 
 DELIMITER ;
 
-CALL GetTestEmployeeDetailsByCandidate(6);
+CALL getAssessmentEmployeeDetailsByCandidate(6);
 
-CREATE PROCEDURE GetTestEmployeeDetailsByCandidate(IN candidate INT)
-BEGIN
-    SELECT 
-        t.id,
-        ts.candidateid,
-        t.name AS testname,
-        t.passinglevel,
-        t.duration,
-        ts.scheduledstart,
-        ts.scheduledend,
-        ts.status
-    FROM 
-        testschedules ts
-    JOIN 
-        tests t ON ts.testid = t.id
-    WHERE 
-        ts.candidateid = candidate;
-END $$
-
-DELIMITER ;
-
-CALL GetTestEmployeeDetailsByCandidate(6);
